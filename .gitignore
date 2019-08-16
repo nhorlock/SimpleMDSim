@@ -45,3 +45,7 @@ build/*-[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9].cmake
 # DartConfig
 DartConfiguration.tcl
 _deps
+build/
+smdweb
+.vscode/
+*.code-workspace
