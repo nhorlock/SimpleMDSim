@@ -30,3 +30,18 @@
 *.exe
 *.out
 *.app
+# Cmake noise
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+build/*-[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9].cmake
+# DartConfig
+DartConfiguration.tcl
+_deps
