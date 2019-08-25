@@ -57,7 +57,7 @@ find_package (SQLite3 REQUIRED)
     
 file(GLOB testfiles "test/unit-*.cpp")
 add_executable(unittests test/testmain.cpp ${testfiles})
-target_link_libraries(unittests Catch2::Catch2 fmt)
+target_link_libraries(unittests Catch2::Catch2 fmt ${SQLite3_LIBRARY})
 message("CXX_FLAGS=${CMAKE_CXX_FLAGS}")
 catch_discover_tests(unittests)
 

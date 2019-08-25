@@ -11,6 +11,8 @@
 #include <sqlite_modern_cpp.h>
 #include <nlohmann/json.hpp>
 #include <fmt/format.h>
+#include <chrono>
+#include "smdutils.h"
 
 using namespace fmt::literals;
 using json=nlohmann::json;
@@ -26,6 +28,36 @@ namespace ss {
             return "Symbol '{}' does not exist."_format(ticker);
         } 
     };
+    class BadTimeOffsetException: public std::exception
+    {
+        public:
+        unsigned long timeOffset;
+        BadTimeOffsetException(unsigned long time):timeOffset(time){}
+        virtual std::string what() throw()
+        {
+            return "Time offset '{}' is not in the 24 hour range."_format(timeOffset);
+        } 
+    };
+    class BadPeriodException: public std::exception
+    {
+        public:
+        unsigned long period;
+        BadPeriodException(unsigned long p):period(p){}
+        virtual std::string what() throw()
+        {
+            return "Trading period '{}' is not a valid 20 second period in the 24 hour range."_format(period);
+        } 
+    };
+    class BadTimeException: public std::exception
+    {
+        public:
+        std::string_view timeStamp;
+        BadTimeException(std::string& time):timeStamp(time){}
+        virtual std::string what() throw()
+        {
+            return "Time Stamps must be HH:MM:SS '{}' is invalid."_format(timeStamp);
+        } 
+    };
     // a simple struct to model a person
     struct symbol {
         int symbolID;
@@ -34,28 +66,80 @@ namespace ss {
     };
     void to_json(json& j, const symbol& s) {
         j = json{{"companyName", s.companyName}, {"symbol", s.symbol}, {"symbolID", s.symbolID}};
-    }
+    };
     void from_json(const json& j, symbol& s) {
         j.at("companyName").get_to(s.companyName);
         j.at("symbol").get_to(s.symbol);
         j.at("symbolID").get_to(s.symbolID);
-    }
+    };
+
+    struct tick {
+        std::string symbol;
+        double price;
+        std::string timeStamp;
+        std::string companyName;
+        unsigned long periodNumber;
+    };
+    void to_json(json& j, const tick& t) {
+        j = json{{"symbol", t.symbol}, {"price", t.price}, {"timeStamp", t.timeStamp}, {"companyName", t.companyName}, {"periodNumber", t.periodNumber}};
+    };
+    void from_json(const json& j, tick& t) {
+        j.at("companyName").get_to(t.companyName);
+        j.at("symbol").get_to(t.symbol);
+        j.at("price").get_to(t.price);
+        j.at("timeStamp").get_to(t.timeStamp);
+        j.at("periodNumber").get_to(t.periodNumber);
+    };
+    struct stats {
+        unsigned long periodNumber;
+        int symbolID;
+        std::string symbol;
+        double minPrice;
+        double maxPrice;
+        std::string periodStartTime;
+        std::string periodEndTime;
+        double openingPrice;
+        double closingPrice;
+    };
+    void to_json(json& j, const stats& s) {
+        j = json{
+                 {"periodNumber", s.periodNumber},
+                 {"symbol", s.symbol},
+                 {"symbolID", s.symbolID},
+                 {"minPrice", s.minPrice},
+                 {"maxPrice", s.maxPrice},
+                 {"periodStartTime", s.periodStartTime},
+                 {"periodEndTime", s.periodEndTime},
+                 {"openingPrice", s.openingPrice},
+                 {"closingPrice", s.closingPrice}};
+    };
+    void from_json(const json& j, stats& s) {
+        j.at("periodNumber").get_to(s.periodNumber);
+        j.at("symbol").get_to(s.symbol);
+        j.at("symbolID").get_to(s.symbolID);
+        j.at("minPrice").get_to(s.minPrice);
+        j.at("maxPrice").get_to(s.maxPrice);
+        j.at("periodStartTime").get_to(s.periodStartTime);
+        j.at("periodEndTime").get_to(s.periodEndTime);
+        j.at("openingPrice").get_to(s.openingPrice);
+        j.at("closingPrice").get_to(s.closingPrice);
+    };
 }
 class SymbolStore
 {
 private:
     sqlite::database db;
+    std::chrono::time_point<std::chrono::system_clock> last_midnight;
+    static constexpr int six_hours=6*60*60;
+    static constexpr int periods_per_six_hours=six_hours/20;
 public:
     SymbolStore():db("tickdata.db")
-    {}
-       // Same database as above
-//        sqlite::database db("tickdata.db");
- // symbols are output as a JSON array as follows
-    //  {
-    //     "SymbolID": 138,
-    //     "Symbol": "a",
-    //     "companyName": "Agilent Technologies Inc"
-    // },
+    {
+        using days = std::chrono::duration<int, std::ratio<86400>>;
+        last_midnight = 
+            std::chrono::time_point_cast<days>(std::chrono::system_clock::now());
+    }
+
     auto getSymbolListAsJSON()
     {
         json symbols;
@@ -86,5 +170,166 @@ public:
             throw(new ss::NotFoundException(ticker));
         }
         return symbols.dump();
+    }
+
+
+    auto offsetFromTimeStamp(std::string timeStamp)
+    {
+        int hh,mm,ss;
+        std::vector<std::string>  stringSplit = timeStamp | view::split(':');
+        if ( stringSplit.size()!=3) throw(new ss::BadTimeException(timeStamp));
+        try{
+            hh=getnum<unsigned int>(stringSplit[0],0,23);
+            mm=getnum<unsigned int>(stringSplit[1],0,59);
+            ss=getnum<unsigned int>(stringSplit[2],0,60);//strictly speaking 60 is valid due to leap seconds.
+        }
+        catch(...)
+        {
+            throw(new ss::BadTimeException(timeStamp));
+        }
+        if(ss==60 && (hh!=23) && (mm != 59)){throw(new ss::BadTimeException(timeStamp));};
+        return((hh*60*60)+(mm*60)+ss);
+    }
+    std::string timestampFromOffset(unsigned long secs_since_midnight)
+    {
+        int hh,mm,ss;
+        hh=secs_since_midnight/3600;
+        mm=((secs_since_midnight-(hh*3600))/60)%60;
+        ss=secs_since_midnight%60;
+        return("{0:02d}:{1:02d}:{2:02d}"_format(hh,mm,ss));
+    }
+    auto periodStartFromOffset(unsigned long secs_since_midnight)
+    {
+        if(secs_since_midnight>24*3600){throw(new ss::BadTimeOffsetException(secs_since_midnight));};
+        return((secs_since_midnight/20)*20);
+    }
+    auto periodContainingOffset(unsigned long secs_since_midnight)
+    {
+        if(secs_since_midnight>24*3600){throw(new ss::BadTimeOffsetException(secs_since_midnight));};
+        return(((secs_since_midnight/20)+1));
+    }
+    auto offsetFromPeriod(unsigned long periodNumber)
+    {
+        if(periodNumber < 1 || periodNumber > 24*3600/20){throw(new ss::BadPeriodException(periodNumber));};
+        return((periodNumber-1)*20);
+    }
+/**
+ * @brief Get the Stock Prices For Symbol As JSON
+ * @description given a time and a number of rows we calculcate the window of data to return
+ * as we only have 6 hours of data, we need to wrap around the data when we span window in a 24 hour period.
+ * each row represents 1 second, there are 6*3600 (21600) rows per instrument.
+ * thus if the time now is 06:00:35 and they pull back 50 rows we need to pull rows from 05:59:45 onwards
+ * The selection algorithm for this is:
+ * - seconds_now % 21600 = secs_this_window (number of seconds in the current window)
+ * - seconds_last = num_rows- secs_this_window (the number we need from the previous window)
+ * - period_multiplier = seconds_now/21600
+ * - select from tickdata where tradetime>(21600-seconds_last) append results (actualPeriod=period*(periodMultiplier-1))
+ * - select from tickdata where tradetime<(secs_this_window) append results (actualPeriod=period*(periodMultiplier))
+ * @param ticker 
+ * @param num_rows 
+ * @return auto 
+ */
+    auto getStockPricesForSymbolAsJSON(std::string_view ticker, int num_rows, int seconds_since_midnight)
+    {
+        json ticks;
+
+        auto max_row_this_window = seconds_since_midnight%six_hours;
+        int min_row_this_window=0;
+        int min_row_previous_window=0;
+        if(max_row_this_window>num_rows-1)
+            min_row_this_window = max_row_this_window-(num_rows-1);
+        else
+            min_row_previous_window = six_hours-((num_rows-1)-max_row_this_window);
+
+        auto six_hour_window_number=(seconds_since_midnight/six_hours);
+        auto period_offset=(six_hour_window_number*periods_per_six_hours);
+        if(max_row_this_window<num_rows-1){
+            int six_hour_window_number_prev;
+            if(six_hour_window_number==0){six_hour_window_number_prev=3;}
+            else six_hour_window_number_prev=six_hour_window_number-1;
+            auto period_offset_prev=(six_hour_window_number_prev*periods_per_six_hours);
+            auto qp = "SELECT s.symbol, t.price, t.tradeTimeOffset, s.companyName, t.periodNumber+{3} "
+                    "FROM tickdata t "
+                    "INNER JOIN symbolmap s ON t.symbolID=s.symbolID "
+                    "WHERE s.symbol='{0}' AND t.tradeTimeOffset BETWEEN {2} AND 21599 "
+                    "LIMIT {1};"_format(ticker, 21600-min_row_previous_window, min_row_previous_window, period_offset_prev);
+            db << qp
+                >> [&](
+                std::string symbol, 
+                double price,
+                unsigned long timeOffset,
+                std::string companyName,
+                unsigned long periodNumber) {
+                    auto timestamp{timestampFromOffset(timeOffset+((six_hour_window_number_prev)*six_hours))};
+                    ss::tick s{symbol, price, timestamp, companyName, periodNumber};
+                    ticks.push_back(s);
+                };
+        }
+        auto q = "SELECT s.symbol, t.price, t.tradeTimeOffset, s.companyName, t.periodNumber+{3} "
+                 "FROM tickdata t "
+                 "INNER JOIN symbolmap s ON t.symbolID=s.symbolID "
+                 "WHERE s.symbol='{0}' AND t.tradeTimeOffset BETWEEN {4} AND {2} "
+                 "LIMIT {1};"_format(ticker, 1+max_row_this_window-min_row_this_window, max_row_this_window, period_offset , min_row_this_window);
+        db << q
+            >> [&](
+             std::string symbol, 
+             double price,
+             unsigned long timeOffset,
+             std::string companyName,
+             unsigned long periodNumber) {
+                 auto timestamp{timestampFromOffset(timeOffset+(six_hour_window_number*six_hours))};
+                 ss::tick s{symbol, price, timestamp, companyName, periodNumber};
+                 ticks.push_back(s);
+            };
+        if(ticks.is_null()) 
+        {
+            throw(new ss::NotFoundException(ticker));
+        }
+        return ticks.dump();
+    }
+
+    auto getStockPricesForSymbolAsJSON(std::string_view ticker, int num_rows)
+    {
+        using namespace std::chrono;
+        auto seconds_now = time_point_cast<seconds>(system_clock::now());
+        auto seconds_since_midnight = (seconds_now-time_point_cast<seconds>(last_midnight)).count();
+        return getStockPricesForSymbolAsJSON(ticker, num_rows, seconds_since_midnight);
+    }
+
+    auto getStatisticalPricesForSymbolAndPeriodAsJSON(std::string_view ticker, unsigned long period)
+    {
+        auto windowedPeriod=((period-1)%(periods_per_six_hours)+1);
+        json statsdata;
+        auto q =
+        R"(SELECT {0} as periodNumber, s.symbolID, s.symbol,
+    MIN(price) AS minPrice, 
+    MAX(price) AS maxPrice,
+    (SELECT price FROM tickdata t WHERE t.symbolID=127 AND tradeTimeOffset={1}) AS openingPrice,
+    (SELECT price FROM tickdata t WHERE t.symbolID=127 AND tradeTimeOffset={2}) AS closingPrice
+FROM tickdata t
+INNER JOIN symbolmap s ON t.symbolID=s.symbolID
+WHERE periodNumber={4} AND s.symbol="{3}";)"_format(period, (windowedPeriod-1)*20, ((windowedPeriod-1)*20)+19, ticker, windowedPeriod);
+        db << q
+            >> [&](
+             unsigned long periodNumber,
+             int symbolID, 
+             std::string symbol, 
+             double minPrice,
+             double maxPrice,
+             double openingPrice,
+             double closingPrice
+             ) {
+                ss::stats s{
+                    periodNumber, symbolID, symbol, minPrice, maxPrice,
+                    timestampFromOffset(offsetFromPeriod(period)),
+                    timestampFromOffset(offsetFromPeriod(period)+19),
+                    openingPrice, closingPrice};
+                statsdata.push_back(s);
+            };
+        if(statsdata.is_null()) 
+        {
+            throw(new ss::NotFoundException(ticker));
+        }
+        return statsdata.dump();
     }
 };
