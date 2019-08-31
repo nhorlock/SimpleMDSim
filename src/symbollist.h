@@ -327,6 +327,9 @@ public:
     {
         auto windowedPeriod=((period-1)%(periods_per_six_hours)+1);
         json statsdata;
+        auto ascending=((period-1)/periods_per_six_hours)%2==0?true:false;
+        auto start=(windowedPeriod-1)*20;
+        auto end=((windowedPeriod-1)*20)+19;
         auto q =
         R"(SELECT {0} as periodNumber, s.symbolID, s.symbol,
     MIN(price) AS minPrice, 
@@ -335,7 +338,7 @@ public:
     (SELECT price FROM tickdata t WHERE t.symbolID=127 AND tradeTimeOffset={2}) AS closingPrice
 FROM tickdata t
 INNER JOIN symbolmap s ON t.symbolID=s.symbolID
-WHERE periodNumber={4} AND s.symbol="{3}";)"_format(period, (windowedPeriod-1)*20, ((windowedPeriod-1)*20)+19, ticker, windowedPeriod);
+WHERE periodNumber={4} AND s.symbol="{3}";)"_format(period, ascending?start:end, ascending?end:start, ticker, windowedPeriod);
         db << q
             >> [&](
              unsigned long periodNumber,

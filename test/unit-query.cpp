@@ -218,6 +218,54 @@ TEST_CASE("Period 4000", "[statsdata]")
     CHECK(results[0].at("periodEndTime") == "22:13:19");
     CHECK(results[0].at("periodNumber") == 4000);
 }
+TEST_CASE("Period 1 == Period 1081", "[statsdata]")
+{
+    std::string res;
+    json result1;
+    json result2;
+    res = s.getStatisticalPricesForSymbolAndPeriodAsJSON("ibm", 1);
+    REQUIRE_NOTHROW(result1 = json::parse(res));
+    CHECK(result1.size() == 1);
+    CHECK(result1[0].at("symbol") == "ibm");
+    std::cout << result1.dump(1) << "\n";
+    res = s.getStatisticalPricesForSymbolAndPeriodAsJSON("ibm", 1081);
+    REQUIRE_NOTHROW(result2 = json::parse(res));
+    CHECK(result2.size() == 1);
+    CHECK(result2[0].at("symbol") == "ibm");
+    std::cout << result2.dump(1) << "\n";
+
+    CHECK(result1[0].at("periodStartTime") != result2[0].at("periodStartTime"));
+    CHECK(result1[0].at("periodEndTime") != result2[0].at("periodEndTime"));
+    CHECK(result1[0].at("periodNumber") != result2[0].at("periodNumber"));
+    CHECK(result1[0].at("minPrice") == result2[0].at("minPrice"));
+    CHECK(result1[0].at("maxPrice") == result2[0].at("maxPrice"));
+    CHECK(result1[0].at("openingPrice") == result2[0].at("closingPrice"));
+    CHECK(result1[0].at("closingPrice") == result2[0].at("openingPrice"));
+}
+TEST_CASE("Period 1 == Period 2161", "[statsdata]")
+{
+    std::string res;
+    json result1;
+    json result2;
+    res = s.getStatisticalPricesForSymbolAndPeriodAsJSON("ibm", 1);
+    REQUIRE_NOTHROW(result1 = json::parse(res));
+    CHECK(result1.size() == 1);
+    CHECK(result1[0].at("symbol") == "ibm");
+    std::cout << result1.dump(1) << "\n";
+    res = s.getStatisticalPricesForSymbolAndPeriodAsJSON("ibm", 2161);
+    REQUIRE_NOTHROW(result2 = json::parse(res));
+    CHECK(result2.size() == 1);
+    CHECK(result2[0].at("symbol") == "ibm");
+    std::cout << result2.dump(1) << "\n";
+
+    CHECK(result1[0].at("periodStartTime") != result2[0].at("periodStartTime"));
+    CHECK(result1[0].at("periodEndTime") != result2[0].at("periodEndTime"));
+    CHECK(result1[0].at("periodNumber") != result2[0].at("periodNumber"));
+    CHECK(result1[0].at("minPrice") == result2[0].at("minPrice"));
+    CHECK(result1[0].at("maxPrice") == result2[0].at("maxPrice"));
+    CHECK(result1[0].at("openingPrice") == result2[0].at("openingPrice"));
+    CHECK(result1[0].at("closingPrice") == result2[0].at("closingPrice"));
+}
 TEST_CASE("Period rollover testing", "[statsdata]")
 {
     std::string res;
