@@ -23,7 +23,7 @@ SymbolStore s;
 int main() {
 	/* stupidly simple webservice */
 	uWS::App()
-        .get("/wave/:ticker", [](auto *res, auto *req) {
+        .get("/API/PseudoFeed/:ticker", [](auto *res, auto *req) {
 			auto ticker = req->getParameter(0);
 			auto reply = shortloop::getSimpleDataForTicker(ticker);
 			auto upd = fmt::format("{{{0}:{{last:{1}}}}}",req->getParameter(0),reply);
