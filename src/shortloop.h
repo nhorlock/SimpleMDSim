@@ -15,7 +15,7 @@
 #include <unordered_map>
 #include <functional>
 
-constexpr int num_samples=10;
+constexpr int num_samples=100;
 constexpr int max_volatility = 10;
 
 namespace shortloop

@@ -23,7 +23,16 @@ TEST_CASE("requesting 10 rows, ibm, now", "[tickdata]")
 {
     std::string res;
     json results;
-    res = s.getStockPricesForSymbolAsJSON("ibm", 10);
+
+    try
+    {
+        res = s.getStockPricesForSymbolAsJSON("ibm", 10);
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << e.what() << '\n';
+    }
+    
     REQUIRE_NOTHROW(results = json::parse(res));
     CHECK(results[0].at("symbol") == "ibm");
     CHECK(results.size() == 10);
@@ -54,7 +63,7 @@ TEST_CASE("request 1 row at time offset 1", "[tickdata]")
     CHECK(results[0].at("timeStamp") == "00:00:01");
     CHECK(results[0].at("periodNumber") == 1);
 }
-TEST_CASE("request 20 rows at time offset 20", "[tickdata]")
+TEST_CASE("request 1 row at time offset 20", "[tickdata]")
 {
     std::string res;
     json results;
@@ -77,37 +86,49 @@ TEST_CASE("request 2 rows at time offset 0 - should wrap backwards", "[tickdata]
     CHECK(results.size() == 2);
     CHECK(results[0].at("timeStamp") == "23:59:59");
     CHECK(results[0].at("periodNumber") == 4320);
+    CHECK(results[0].at("price") == results[1].at("price"));
     CHECK(results[1].at("timeStamp") == "00:00:00");
     CHECK(results[1].at("periodNumber") == 1);
 }
-TEST_CASE("request 10 rows at time offset 5 (window -5 - +5 expected)", "[tickdata]")
+TEST_CASE("request 10 rows at time offset 4 (window -5 - +5 expected)", "[tickdata]")
 {
     std::string res;
     json results;
-    res = s.getStockPricesForSymbolAsJSON("ibm", 10, 5);
+    res = s.getStockPricesForSymbolAsJSON("ibm", 10, 4);
     REQUIRE_NOTHROW(results = json::parse(res));
     CHECK(results[0].at("symbol") == "ibm");
-    // std::cout << results.dump(1) << "\n";
+    std::cout << results.dump(1) << "\n";
     CHECK(results.size() == 10);
-    CHECK(results[0].at("timeStamp") == "23:59:56");
+    CHECK(results[0].at("timeStamp") == "23:59:55");
     CHECK(results[0].at("periodNumber") == 4320);
-    CHECK(results[9].at("timeStamp") == "00:00:05");
+    CHECK(results[9].at("timeStamp") == "00:00:04");
     CHECK(results[9].at("periodNumber") == 1);
+    auto j= results.size();
+    j--;
+    for(auto i=0; i <results.size();i++){
+        CHECK(results[i].at("price") == results[j-i].at("price"));
+    }
 }
 
-TEST_CASE("time offset 21610 (end of first window+10) count 20", "[tickdata]")
+TEST_CASE("time offset 21609 (end of first window+10) count 20", "[tickdata]")
 {
     std::string res;
     json results;
-    res = s.getStockPricesForSymbolAsJSON("ibm", 20, 21610);
+    res = s.getStockPricesForSymbolAsJSON("ibm", 20, 21609);
     REQUIRE_NOTHROW(results = json::parse(res));
     CHECK(results[0].at("symbol") == "ibm");
     // std::cout << results.dump(1) << "\n";
     CHECK(results.size() == 20);
-    CHECK(results[0].at("timeStamp") == "05:59:51");
+    CHECK(results[0].at("timeStamp") == "05:59:50");
     CHECK(results[0].at("periodNumber") == 1080);
-    CHECK(results[19].at("timeStamp") == "06:00:10");
+    CHECK(results[19].at("timeStamp") == "06:00:09");
     CHECK(results[19].at("periodNumber") == 1081);
+
+    auto j= results.size();
+    j--;
+    for(auto i=0; i <results.size();i++){
+        CHECK(results[i].at("price") == results[j-i].at("price"));
+    }
 }
 
 TEST_CASE("stamp to offset", "[timestamp]")

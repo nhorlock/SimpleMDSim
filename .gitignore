@@ -49,3 +49,4 @@ build/
 smdweb
 .vscode/
 *.code-workspace
+core

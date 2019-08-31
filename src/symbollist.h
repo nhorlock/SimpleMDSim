@@ -233,26 +233,37 @@ public:
     {
         json ticks;
 
-        auto max_row_this_window = seconds_since_midnight%six_hours;
-        int min_row_this_window=0;
-        int min_row_previous_window=0;
-        if(max_row_this_window>num_rows-1)
-            min_row_this_window = max_row_this_window-(num_rows-1);
-        else
-            min_row_previous_window = six_hours-((num_rows-1)-max_row_this_window);
-
-        auto six_hour_window_number=(seconds_since_midnight/six_hours);
-        auto period_offset=(six_hour_window_number*periods_per_six_hours);
-        if(max_row_this_window<num_rows-1){
-            int six_hour_window_number_prev;
-            if(six_hour_window_number==0){six_hour_window_number_prev=3;}
-            else six_hour_window_number_prev=six_hour_window_number-1;
-            auto period_offset_prev=(six_hour_window_number_prev*periods_per_six_hours);
-            auto qp = "SELECT s.symbol, t.price, t.tradeTimeOffset, s.companyName, t.periodNumber+{3} "
-                    "FROM tickdata t "
-                    "INNER JOIN symbolmap s ON t.symbolID=s.symbolID "
-                    "WHERE s.symbol='{0}' AND t.tradeTimeOffset BETWEEN {2} AND 21599 "
-                    "LIMIT {1};"_format(ticker, 21600-min_row_previous_window, min_row_previous_window, period_offset_prev);
+        auto start_window = seconds_since_midnight/six_hours;
+        auto end_window{start_window};
+        auto start_in_window = seconds_since_midnight%six_hours;
+        auto end_in_window = (seconds_since_midnight-(num_rows-1))%six_hours;
+        if((seconds_since_midnight-(num_rows-1))<start_window*six_hours)
+        {
+            end_window = start_window-1;
+            if(end_window<0)
+            {
+                end_window=3;
+                end_in_window += six_hours;
+            }
+        }
+        auto end{end_in_window};
+        auto ascending{true};
+        auto period_offset=(start_window*periods_per_six_hours);
+        auto period_offset_prev=(end_window*periods_per_six_hours);
+        if(start_window%2 == 1){
+            ascending=false;
+        }
+        if(start_window != end_window){
+            auto qp = 
+                "SELECT s.symbol, t.price, t.tradeTimeOffset, s.companyName, t.periodNumber "
+                "FROM tickdata t "
+                "INNER JOIN symbolmap s ON t.symbolID=s.symbolID "
+                "WHERE s.symbol='{0}' AND t.tradeTimeOffset BETWEEN {1} AND {2} "
+                "ORDER BY t.tradeTimeOffset {3};"_format(ticker, 
+                                                         !ascending?end_in_window:0,
+                                                         !ascending?six_hours-1:six_hours-(end_in_window+1),
+                                                         !ascending?"ASC":"DESC");
+            // std::cout << qp << "\n";
             db << qp
                 >> [&](
                 std::string symbol, 
@@ -260,27 +271,43 @@ public:
                 unsigned long timeOffset,
                 std::string companyName,
                 unsigned long periodNumber) {
-                    auto timestamp{timestampFromOffset(timeOffset+((six_hour_window_number_prev)*six_hours))};
+                    auto timestamp{timestampFromOffset(!ascending?(timeOffset+((end_window)*six_hours))
+                                                                :((end_window+1)*six_hours)-(timeOffset+1))};
+                    if(!ascending){ periodNumber += (end_window)*periods_per_six_hours;}
+                    else { periodNumber = (end_window+1)*periods_per_six_hours-(periodNumber-1);};
                     ss::tick s{symbol, price, timestamp, companyName, periodNumber};
                     ticks.push_back(s);
                 };
+            end=0; // setup end for the next query
         }
-        auto q = "SELECT s.symbol, t.price, t.tradeTimeOffset, s.companyName, t.periodNumber+{3} "
-                 "FROM tickdata t "
-                 "INNER JOIN symbolmap s ON t.symbolID=s.symbolID "
-                 "WHERE s.symbol='{0}' AND t.tradeTimeOffset BETWEEN {4} AND {2} "
-                 "LIMIT {1};"_format(ticker, 1+max_row_this_window-min_row_this_window, max_row_this_window, period_offset , min_row_this_window);
-        db << q
+
+        auto qp = 
+            "SELECT s.symbol, t.price, t.tradeTimeOffset, s.companyName, t.periodNumber "
+            "FROM tickdata t "
+            "INNER JOIN symbolmap s ON t.symbolID=s.symbolID "
+            "WHERE s.symbol='{0}' AND t.tradeTimeOffset BETWEEN {1} AND {2} "
+            "ORDER BY t.tradeTimeOffset {3};"_format(ticker, 
+                                                     ascending?end:six_hours-(start_in_window+1),
+                                                     ascending?start_in_window:six_hours-(end+1),
+                                                     ascending?"ASC":"DESC");
+        std::cout << qp << "\n";
+        db << qp
             >> [&](
-             std::string symbol, 
-             double price,
-             unsigned long timeOffset,
-             std::string companyName,
-             unsigned long periodNumber) {
-                 auto timestamp{timestampFromOffset(timeOffset+(six_hour_window_number*six_hours))};
-                 ss::tick s{symbol, price, timestamp, companyName, periodNumber};
-                 ticks.push_back(s);
+            std::string symbol, 
+            double price,
+            unsigned long timeOffset,
+            std::string companyName,
+            unsigned long periodNumber) {
+                // auto timestamp{timestampFromOffset(timeOffset+((start_window)*six_hours))};
+                auto timestamp{timestampFromOffset(ascending?(timeOffset+((start_window)*six_hours))
+                                                            :((start_window)*six_hours)+(six_hours-(timeOffset+1)))};
+                if(ascending){ periodNumber += (start_window)*periods_per_six_hours;}
+                else { periodNumber = (start_window*periods_per_six_hours)+(periods_per_six_hours-(periodNumber-1));};
+                ss::tick s{symbol, price, timestamp, companyName, periodNumber};
+                ticks.push_back(s);
             };
+
+
         if(ticks.is_null()) 
         {
             throw(new ss::NotFoundException(ticker));
