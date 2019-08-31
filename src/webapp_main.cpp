@@ -68,10 +68,8 @@ int main() {
 					{
 						try
 						{
-							using namespace std::chrono;
-							auto seconds_now = time_point_cast<seconds>(system_clock::now());
-							auto seconds_since_midnight = (seconds_now-time_point_cast<seconds>(last_midnight)).count();							
-							auto period_now=periodContainingOffset(seconds_since_midnight);
+							auto seconds_since_midnight = currentTimeOffset();							
+							auto period_now=s.periodContainingOffset(seconds_since_midnight);
 							period=getnum<unsigned int>(value,1,4320);
 							if(period_now == period){
 								throw(std::range_error("value not in expected range "));

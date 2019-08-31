@@ -129,15 +129,11 @@ class SymbolStore
 {
 private:
     sqlite::database db;
-    std::chrono::time_point<std::chrono::system_clock> last_midnight;
     static constexpr int six_hours=6*60*60;
     static constexpr int periods_per_six_hours=six_hours/20;
 public:
     SymbolStore():db("tickdata.db")
     {
-        using days = std::chrono::duration<int, std::ratio<86400>>;
-        last_midnight = 
-            std::chrono::time_point_cast<days>(std::chrono::system_clock::now());
     }
 
     auto getSymbolListAsJSON()
@@ -317,9 +313,7 @@ public:
 
     auto getStockPricesForSymbolAsJSON(std::string_view ticker, int num_rows)
     {
-        using namespace std::chrono;
-        auto seconds_now = time_point_cast<seconds>(system_clock::now());
-        auto seconds_since_midnight = (seconds_now-time_point_cast<seconds>(last_midnight)).count();
+        auto seconds_since_midnight = currentTimeOffset();
         return getStockPricesForSymbolAsJSON(ticker, num_rows, seconds_since_midnight);
     }
 

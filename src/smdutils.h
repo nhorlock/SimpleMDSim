@@ -37,3 +37,15 @@ auto getnum(std::string_view str, T min, T max)
         return val.value();
     }
 }
+
+auto currentTimeOffset()
+{
+    using namespace std::chrono;
+    using days = duration<int, std::ratio<86400>>;
+    std::chrono::time_point<std::chrono::system_clock> last_midnight = 
+        std::chrono::time_point_cast<days>(std::chrono::system_clock::now());
+
+    auto seconds_now = time_point_cast<seconds>(system_clock::now());
+    auto seconds_since_midnight = (seconds_now-time_point_cast<seconds>(last_midnight)).count();
+    return seconds_since_midnight;
+}
