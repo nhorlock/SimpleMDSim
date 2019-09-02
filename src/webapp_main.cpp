@@ -21,6 +21,7 @@ using namespace ranges;
 SymbolStore s;
 
 int main() {
+	std::cout << "Starting app\n";
 	/* stupidly simple webservice */
 	uWS::App()
         .get("/API/PseudoFeed/:ticker", [](auto *res, auto *req) {
@@ -160,6 +161,9 @@ int main() {
 	        if (token) {
 		        std::cout << "Listening on port " << 3000 << "\n";
 	        }
+			else{
+				std::cout << "Failed to listen on port 3000\n";
+			}
 	    })
         .run();
 

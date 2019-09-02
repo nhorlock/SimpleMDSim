@@ -192,6 +192,28 @@ TEST_CASE("iterate over 24 hours ensure consecutive periods", "[timestamp]")
     }
 }
 
+TEST_CASE("Period 1 matches tickdata", "[statsdata]")
+{
+    std::string res;
+    json results;
+    res = s.getStatisticalPricesForSymbolAndPeriodAsJSON("ibm", 1);
+    REQUIRE_NOTHROW(results = json::parse(res));
+    
+    json ticks;
+    res = s.getStockPricesForSymbolAsJSON("ibm", 20, 19);
+    REQUIRE_NOTHROW(ticks = json::parse(res));
+
+    CHECK(results.size() == 1);
+    CHECK(ticks.size() == 20);
+
+    CHECK(results[0].at("symbol") == "ibm");
+    std::cout << results.dump(1) << "\n";
+    CHECK(results[0].at("periodStartTime") == "00:00:00");
+    CHECK(results[0].at("periodEndTime") == "00:00:19");
+    CHECK(results[0].at("periodNumber") == 1);
+    CHECK(results[0].at("openingPrice") == ticks[0].at("price"));
+    CHECK(results[0].at("closingPrice") == ticks[19].at("price"));
+}
 TEST_CASE("Period 2", "[statsdata]")
 {
     std::string res;
@@ -218,7 +240,7 @@ TEST_CASE("Period 4000", "[statsdata]")
     CHECK(results[0].at("periodEndTime") == "22:13:19");
     CHECK(results[0].at("periodNumber") == 4000);
 }
-TEST_CASE("Period 1 == Period 1081", "[statsdata]")
+TEST_CASE("Period 1 == inverse Period 2160", "[statsdata]")
 {
     std::string res;
     json result1;
@@ -228,7 +250,7 @@ TEST_CASE("Period 1 == Period 1081", "[statsdata]")
     CHECK(result1.size() == 1);
     CHECK(result1[0].at("symbol") == "ibm");
     std::cout << result1.dump(1) << "\n";
-    res = s.getStatisticalPricesForSymbolAndPeriodAsJSON("ibm", 1081);
+    res = s.getStatisticalPricesForSymbolAndPeriodAsJSON("ibm", 2160);
     REQUIRE_NOTHROW(result2 = json::parse(res));
     CHECK(result2.size() == 1);
     CHECK(result2[0].at("symbol") == "ibm");
@@ -287,6 +309,7 @@ TEST_CASE("Period rollover testing", "[statsdata]")
     CHECK(p2[0].at("periodEndTime") == "06:00:19");
     CHECK(p1[0].at("periodNumber") == 1080);
     CHECK(p2[0].at("periodNumber") == 1081);
+    CHECK(p1[0].at("openingPrice") == p2[0].at("closingPrice"));
 }
 
 // TEST_CASE("Period 3820", "[statsdata]")

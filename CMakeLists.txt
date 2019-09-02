@@ -27,6 +27,11 @@ find_package(fmt)
 find_package(nlohmann_json 3.2.0 REQUIRED)
 # yo use target_link_libraries(foo PRIVATE nlohmann_json::nlohmann_json)
 
+find_program(Docker_EXECUTABLE docker)
+if(NOT Docker_EXECUTABLE)
+    message(FATAL_ERROR "Cannot find the docker executable!")
+endif()
+
 if(DEFINED ENV{"THIRDPARTY"})
     set (DGR_THIRDPARTY_FOLDER $ENV{"THIRDPARTY"})
 endif()
@@ -50,8 +55,6 @@ add_subdirectory(${THIRDPARTY_FOLDER}/uWebSockets ./build)
 set(SRC_DIR ${CMAKE_CURRENT_LIST_DIR}/src)
 
 include_directories(${SRC_DIR})
-#include_directories(${DGR_THIRDPARTY_FOLDER}/json/single_include)
-#include_directories(${THIRDPARTY_FOLDER}/hash-library)
 
 find_package (SQLite3 REQUIRED)
     
@@ -61,20 +64,13 @@ target_link_libraries(unittests Catch2::Catch2 fmt ${SQLite3_LIBRARY})
 message("CXX_FLAGS=${CMAKE_CXX_FLAGS}")
 catch_discover_tests(unittests)
 
-# file(GLOB jsonfiles "test/test-json*.cpp")
-# add_executable(jsontests test/testmain.cpp ${jsonfiles})
-# target_link_libraries(jsontests Catch2::Catch2 engine pthread)
-# catch_discover_tests(jsontests)
-
 set(web_src ${SRC_DIR}/shortloop.cpp)
-
-# file(GLOB webtests_src "test/test-web*.cpp")
-# add_executable(webtests test/testmain.cpp ${webtests_src} ${web_src})
-# #target_include_directories(fixtests PUBLIC ${SRC_DIR} engine)
-# target_link_libraries(webtests PUBLIC Catch2::Catch2 engine nlohmann_json::nlohmann_json fmt pthread)
-# message("CXX_FLAGS=${CMAKE_CXX_FLAGS}")
-# catch_discover_tests(webtests)
 
 add_executable(smdweb ${SRC_DIR}/webapp_main.cpp ${web_src})
 target_include_directories(smdweb PUBLIC ${SQLITE3_INCLUDE_DIRS})
 target_link_libraries(smdweb fmt uSockets uWebSockets pthread ${SQLite3_LIBRARY})
+
+add_custom_target(buildContainer
+    COMMAND ${Docker_EXECUTABLE} build --tag nhorlock/md-simulator:1.0 --file
+        ${CMAKE_CURRENT_LIST_DIR}/Dockerfile ${CMAKE_CURRENT_LIST_DIR}
+)

@@ -132,7 +132,7 @@ private:
     static constexpr int six_hours=6*60*60;
     static constexpr int periods_per_six_hours=six_hours/20;
 public:
-    SymbolStore():db("tickdata.db")
+    SymbolStore():db("./tickdata.db")
     {
     }
 
@@ -286,7 +286,7 @@ public:
                                                      ascending?end:six_hours-(start_in_window+1),
                                                      ascending?start_in_window:six_hours-(end+1),
                                                      ascending?"ASC":"DESC");
-        std::cout << qp << "\n";
+        // std::cout << qp << "\n";
         db << qp
             >> [&](
             std::string symbol, 
@@ -319,9 +319,12 @@ public:
 
     auto getStatisticalPricesForSymbolAndPeriodAsJSON(std::string_view ticker, unsigned long period)
     {
-        auto windowedPeriod=((period-1)%(periods_per_six_hours)+1);
-        json statsdata;
         auto ascending=((period-1)/periods_per_six_hours)%2==0?true:false;
+        auto windowedPeriod=((period-1)%(periods_per_six_hours)+1);
+        if(!ascending){
+            windowedPeriod=1080-(windowedPeriod-1);
+        }
+        json statsdata;
         auto start=(windowedPeriod-1)*20;
         auto end=((windowedPeriod-1)*20)+19;
         auto q =
