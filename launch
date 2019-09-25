@@ -1,0 +1,4 @@
+#!/bin/bash
+
+sqlite3 tickdata.db 'select * from tickdata limit 5' | cat
+/smdweb

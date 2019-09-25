@@ -4,9 +4,12 @@ MAINTAINER Neil Horlock <nhorlock@gmail.com>
 
 RUN apt update \
     && apt install -y sqlite3 \
-    && apt install -y strace
+    && apt install -y strace \
+    && mkdir -p /db
+
+EXPOSE 3000
 
 COPY build/smdweb /smdweb
-COPY tickdata.db /tickdata.db
-#CMD /smdweb
-CMD /bin/bash
+ADD tickdata.db /tickdata.db
+COPY launch /launch
+CMD /launch
